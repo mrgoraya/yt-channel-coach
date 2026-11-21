@@ -1,0 +1,21 @@
+{
+  "name": "yt-channel-coach",
+  "version": "1.2.0",
+  "description": "Your free YouTube coach in Claude Code: channel audit, video ideas from real demand, title and thumbnail checks, unanswered-comment replies, competitor comparison and weekly progress tracking.",
+  "author": {
+    "name": "Think with MR",
+    "url": "https://www.youtube.com/@ThinkwithMRG"
+  },
+  "homepage": "https://www.youtube.com/@ThinkwithMRG",
+  "keywords": [
+    "youtube",
+    "creator",
+    "growth",
+    "audit",
+    "video ideas",
+    "titles",
+    "thumbnails",
+    "comments"
+  ],
+  "license": "MIT"
+}

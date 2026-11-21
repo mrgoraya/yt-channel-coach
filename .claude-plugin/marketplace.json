@@ -1,0 +1,16 @@
+{
+  "name": "think-with-mr",
+  "owner": {
+    "name": "Think with MR",
+    "url": "https://www.youtube.com/@ThinkwithMRG"
+  },
+  "description": "Free Claude Code plugins from the Think with MR YouTube channel.",
+  "plugins": [
+    {
+      "name": "yt-channel-coach",
+      "source": "./",
+      "description": "Your free YouTube coach: channel audit, video ideas, title and thumbnail checks, comment replies, competitor spy, weekly progress.",
+      "category": "productivity"
+    }
+  ]
+}
