@@ -17,5 +17,6 @@
     "thumbnails",
     "comments"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "icon": ".claude-plugin/icon.png"
 }
