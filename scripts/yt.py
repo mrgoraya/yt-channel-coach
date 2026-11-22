@@ -14,6 +14,7 @@ A free YouTube Data API v3 key unlocks full stats, comments and competitor searc
   yt.py unanswered <@handle> [--videos 10] [--max 60]
   yt.py thumbs [<@handle>] [--search "<query>"] [--max 8] [--out DIR]
   yt.py snapshot <@handle>
+  yt.py scorecard <@handle>          (fixed 100-point score and A-F grade)
 """
 import argparse
 import json
@@ -323,6 +324,102 @@ def cmd_snapshot(a):
          "videos": changes})
 
 
+# A "hook" is a promised result, a number that means something, or open curiosity.
+# Version numbers ("5.5") and feature words ("Tutorial", "Explained") don't count.
+HOOK_WORDS = re.compile(
+    r"\?|!|\$\s?\d|\b\d+\s?x\b|\b\d+\s(ways|tips|tools|steps|mistakes|minutes|mins|days|hours|seconds)\b|"
+    r"\b(free|no|without|never|stop|vs|secret|mistake|truth|fake|broke|hurt|nobody|everyone|"
+    r"i (built|tested|let|made|tried|gave|turned|replaced)|kaise|kyun)\b", re.I)
+EXPLAINER = re.compile(r"\b(what is|explained|tutorial|introduction|intro to|basics|overview)\b", re.I)
+
+
+def tier(value, steps):
+    """steps: [(threshold, points), ...] high to low; the first threshold the value meets wins."""
+    for threshold, points in steps:
+        if value >= threshold:
+            return points
+    return 0
+
+
+def cmd_scorecard(a):
+    """Fixed 100-point channel score: same data in, same grade out."""
+    d = fetch_channel(a.ref, 50)
+    has_key = d["mode"] == "api"
+    longs = sorted([v for v in d["videos"] if v.get("is_short") is False],
+                   key=lambda v: v["days_live"])
+    if len(longs) < 3:
+        fail("Need at least 3 long videos to score a channel.", long_videos=len(longs))
+    last10 = longs[:10]
+    med = median([v["views"] for v in last10]) or 1
+    parts = []
+
+    # 1. Consistency: long uploads per week over 60 days, and the longest recent gap
+    recent = [v for v in longs if v["days_live"] <= 60]
+    per_week = round(len(recent) / (60 / 7), 2)
+    ages = [0] + [v["days_live"] for v in longs[:6]]
+    gap = round(max(b - a for a, b in zip(ages, ages[1:])), 1)
+    pts = round(min(per_week, 1) * 14) + tier(-gap, [(-10, 6), (-21, 3)])
+    parts.append({"criterion": "Consistency", "points": pts, "max": 20,
+                  "measured": f"{per_week} long videos/week (last 60 days); longest gap {gap} days",
+                  "rule": "1+ per week = 14 pts (scaled); longest gap <=10 days = 6, <=21 days = 3"})
+
+    # 2. Momentum: newer vs older long videos (only ones at least 14 days old, so both had time).
+    # The single biggest hit is left out so one outlier can't fake a trend.
+    best = max(longs, key=lambda v: v["views"])
+    aged = [v for v in longs if v["days_live"] >= 14 and v is not best]
+    if len(aged) >= 6:
+        k = min(4, len(aged) // 2)
+        new_med = median([v["views"] for v in aged[:k]])
+        old_med = median([v["views"] for v in aged[k:2 * k]])
+        ratio = round(new_med / max(old_med, 1), 2)
+        pts = tier(ratio, [(1.2, 20), (1.0, 15), (0.8, 10), (0.5, 5)])
+        measured = (f"median of newest {k} = {new_med:,} vs previous {k} = {old_med:,} ({ratio}x), "
+                    "biggest hit left out")
+    else:
+        pts, measured = 10, "not enough videos older than 14 days; neutral 10/20"
+    parts.append({"criterion": "Momentum", "points": pts, "max": 20, "measured": measured,
+                  "rule": "newer/older median: 1.2x+ = 20, 1.0x = 15, 0.8x = 10, 0.5x = 5"})
+
+    # 3. Hit power: best long video vs the channel's median
+    x = round(best["views"] / med, 1)
+    parts.append({"criterion": "Hit power", "points": tier(x, [(10, 20), (5, 16), (3, 12), (2, 8), (0, 4)]),
+                  "max": 20,
+                  "measured": f"best \"{best['title'][:60]}\" = {best['views']:,} views = {x}x median ({med:,})",
+                  "rule": "best/median: 10x+ = 20, 5x = 16, 3x = 12, 2x = 8, else 4"})
+
+    # 4. Engagement: likes per 100 views (+ comments per 1,000 views with a key)
+    lp = median([100 * (v.get("likes") or 0) / max(v["views"], 1) for v in last10])
+    like_pts = tier(lp, [(5, 12), (3.5, 9), (2, 6), (1, 3)])
+    if has_key:
+        cp = median([1000 * v.get("comments", 0) / max(v["views"], 1) for v in last10])
+        pts = like_pts + tier(cp, [(5, 8), (2, 6), (1, 4), (0.5, 2)])
+        measured = f"{lp:.1f} likes per 100 views; {cp:.1f} comments per 1,000 views (median, last 10 long)"
+        rule = "likes/100: 5+ = 12, 3.5 = 9, 2 = 6, 1 = 3; comments/1000: 5+ = 8, 2 = 6, 1 = 4, 0.5 = 2"
+    else:
+        pts = round(like_pts * 20 / 12)
+        measured = f"{lp:.1f} likes per 100 views (median, last 10 long; comments need a key)"
+        rule = "likes/100: 5+ = 20, 3.5 = 15, 2 = 10, 1 = 5 (no-key mode)"
+    parts.append({"criterion": "Engagement", "points": pts, "max": 20, "measured": measured, "rule": rule})
+
+    # 5. Packaging: title length and a result / number / curiosity signal
+    titles = [v["title"] for v in last10]
+    short_share = sum(len(t) <= 60 for t in titles) / len(titles)
+    hook_share = sum(bool(HOOK_WORDS.search(t)) and not EXPLAINER.search(t) for t in titles) / len(titles)
+    pts = round(short_share * 8 + hook_share * 12)
+    parts.append({"criterion": "Packaging", "points": pts, "max": 20,
+                  "measured": f"{round(short_share * 100)}% of titles <= 60 chars; {round(hook_share * 100)}% "
+                              "promise a result or curiosity (free, no/without, vs, $, 'I tested/built…', a question…); "
+                              "explainer titles ('What is', 'Tutorial', 'Explained') don't count",
+                  "rule": "8 x share of short titles + 12 x share of hook titles (last 10 long)"})
+
+    total = sum(p["points"] for p in parts)
+    grade = "A" if total >= 90 else "B" if total >= 75 else "C" if total >= 60 else "D" if total >= 45 else "F"
+    out({"channel_title": d["channel_title"], "mode": d["mode"], "score": total, "grade": grade,
+         "grade_scale": "A 90+ · B 75+ · C 60+ · D 45+ · F below 45",
+         "long_videos_scored": len(longs), "parts": parts,
+         "weakest": min(parts, key=lambda p: p["points"] / p["max"])["criterion"]})
+
+
 def cmd_comments(a):
     cid = resolve_channel(a.ref)
     ch = api("channels", part="snippet,contentDetails", id=cid)["items"][0]
@@ -430,6 +527,7 @@ def main():
     p.add_argument("--days", type=int, default=30); p.add_argument("--max", type=int, default=8)
     p.add_argument("--out", default="./yt-thumbnails"); p.set_defaults(f=cmd_thumbs)
     p = sub.add_parser("snapshot"); p.add_argument("ref"); p.set_defaults(f=cmd_snapshot)
+    p = sub.add_parser("scorecard"); p.add_argument("ref"); p.set_defaults(f=cmd_scorecard)
     p = sub.add_parser("suggest"); p.add_argument("seed"); p.add_argument("--hl", default="en")
     p.add_argument("--gl", default="US"); p.set_defaults(f=cmd_suggest)
     a = ap.parse_args()

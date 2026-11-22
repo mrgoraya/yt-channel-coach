@@ -4,7 +4,7 @@ A Claude Code plugin from the [Think with MR](https://www.youtube.com/@Thinkwith
 
 | Command | What it does |
 |---|---|
-| `/yt-channel-coach:audit` | Grades your channel, finds your best video and why it won, gives 5 fixes |
+| `/yt-channel-coach:audit` | A fixed 100-point scorecard (A–F), your best video and why it won, and 5 fixes |
 | `/yt-channel-coach:ideas` | Next video ideas from your comments, competitor wins and real searches |
 | `/yt-channel-coach:title` | Scores your title before you upload and suggests better ones |
 | `/yt-channel-coach:thumbnail` | Tests your thumbnail at phone size and against this month's winning thumbnails |
@@ -17,13 +17,27 @@ A Claude Code plugin from the [Think with MR](https://www.youtube.com/@Thinkwith
 
 From the audit of [@ThinkwithMRG](https://www.youtube.com/@ThinkwithMRG):
 
-> **Grade: C+.** One big hit, but it isn't being repeated yet.
+> **Score: 90/100 (A).** Weakest part: engagement (2.8 likes per 100 views).
 > **Best video:** "Claude Opus 5.5 & Fable 5.1 with Millions of Free Tokens (No Paid Plan)" got 55,585 views, **71× your median**.
 > **Why it won:** every outlier promises to *save money or skip a skill* (Free, $0, No Paid Plan, Without Code).
 > **Not working:** plain explainers (173 views), and a 10-day gap right after the hit.
 > + 5 fixes for the next 30 days and a next-video idea.
 
 And from `/yt-channel-coach:replies`: *"73 comments have no reply, and 29 of them are questions or complaints"*, each with a draft reply in the viewer's own language.
+
+## How the grade works
+
+The audit uses a **fixed 100-point scorecard**, so the same data always gives the same grade:
+
+| Part (20 pts each) | What it measures |
+|---|---|
+| Consistency | Long videos per week (last 60 days) and the longest recent gap |
+| Momentum | Newer vs older videos' median views; your single biggest hit is left out |
+| Hit power | Your best video divided by your median |
+| Engagement | Likes per 100 views (+ comments per 1,000 views with a key) |
+| Packaging | Titles of 60 characters or fewer that promise a result or curiosity |
+
+**A** 90+ · **B** 75+ · **C** 60+ · **D** 45+ · **F** below 45. It compares your channel with itself, not with big channels.
 
 ## Requirements
 
